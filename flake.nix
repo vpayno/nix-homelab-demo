@@ -92,6 +92,80 @@
           tmux
           tree
         ];
+
+        scripts = {
+          update-host = pkgs.writeShellApplication {
+            name = "nixos-rebuild-host";
+            runtimeInputs = with pkgs; [
+              coreutils
+              jq
+              moreutils
+              nixos-rebuild
+              openssh
+            ];
+            text = ''
+              declare target="''${1:-}"
+              declare builder="''${2:-build1}"
+
+              declare -a targets
+
+              mapfile -t targets < <(nix flake show --json 2> /dev/null | jq -r '.nixosConfigurations | keys[]')
+
+              if [[ -z ''${target} ]]; then
+                printf "ERROR: You must specify a target host!\n"
+                printf "\n"
+
+                printf "Valid host targets:\n"
+                printf "\t%s\n"  "''${targets[@]}"
+                printf "\n"
+                exit 1
+              fi
+
+              if ! grep -E -q "^''${target}$" < <(printf "%s\n" "''${targets[@]}"); then
+                printf "ERROR: target [%s] not defined.\n" "''${target}"
+                printf "\n"
+
+                printf "Valid host targets:\n"
+                printf "\t%s\n"  "''${targets[@]}"
+                printf "\n"
+                exit 1
+              fi
+
+              printf "\n"
+              printf "Testing connection to build server: %s\n" "''${builder}"
+              printf "\n"
+              # shellcheck disable=SC2029
+              ssh -t "''${builder}" echo "connected to ''${builder} server from $HOSTNAME"
+              printf "\n"
+              # shellcheck disable=SC2029
+              ssh -t "''${target}" ssh "''${builder}" echo "connected to ''${builder} server from \$HOSTNAME"
+              printf "\n"
+
+              echo Running: nixos-rebuild switch --build-host root@"''${builder}" --target-host root@"''${target}" --use-substitutes --flake .#"''${target}"
+              printf "\n"
+              time nixos-rebuild switch --build-host root@"''${builder}" --target-host root@"''${target}" --use-substitutes --flake .#"''${target}"
+            '';
+          };
+
+          show-available-hosts = pkgs.writeShellApplication {
+            name = "show-available-hosts";
+            runtimeInputs = with pkgs; [
+              coreutils
+              jq
+              moreutils
+              nixos-rebuild
+            ];
+            text = ''
+              declare -a targets
+
+              mapfile -t targets < <(nix flake show --json 2> /dev/null | jq -r '.nixosConfigurations | keys[]')
+
+              printf "Available host targets:\n"
+              printf "\t%s\n"  "''${targets[@]}"
+              printf "\n"
+            '';
+          };
+        };
       in
       {
         formatter = treefmt-conf.formatter.${system};
@@ -117,6 +191,24 @@
             meta = {
               description = "pre-configured neovim editor";
               name = "nvim-${self.packages.${system}.nvim-conf.version}";
+            };
+          };
+
+          update-host = {
+            type = "app";
+            program = "${pkgs.lib.getExe scripts.update-host}";
+            meta = {
+              description = "nixos-rebuild wrapper for updating hosts";
+              name = "update-host-${version}";
+            };
+          };
+
+          show-available-hosts = {
+            type = "app";
+            program = "${pkgs.lib.getExe scripts.show-available-hosts}";
+            meta = {
+              description = "show available host installation targets";
+              name = "show-available-hosts-${version}";
             };
           };
         };
