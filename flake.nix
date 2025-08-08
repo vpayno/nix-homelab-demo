@@ -69,6 +69,17 @@
           nvim-conf = nvim-conf.packages.${system}.default;
         };
 
+        apps = {
+          nvim = {
+            type = "app";
+            program = "${pkgs.lib.getExe self.packages.${system}.nvim-conf}";
+            meta = {
+              description = "pre-configured neovim editor";
+              name = "nvim-${self.packages.${system}.nvim-conf.version}";
+            };
+          };
+        };
+
         devShells = {
           default = pkgs.mkShell {
             packages = commonDevShellPkgs ++ [ self.packages.${system}.nvim-conf ];
